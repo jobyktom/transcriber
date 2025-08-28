@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { Header } from './components/Header';
 import { VideoUpload } from './components/VideoUpload';
@@ -8,8 +7,10 @@ import { SubtitleDownloader } from './components/SubtitleDownloader';
 import { Loader } from './components/Loader';
 import { generateTranscriptAndSubtitles, translateContent } from './services/geminiService';
 import type { TranscriptSegment, GenerationResult, Translations } from './types';
-import { GenerateIcon, TranslateIcon } from './components/icons';
+import { GenerateIcon, TranslateIcon, ArchiveIcon } from './components/icons';
 import { ProfanityControl } from './components/ProfanityControl';
+
+declare var JSZip: any;
 
 const App: React.FC = () => {
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -138,6 +139,41 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDownloadAll = async () => {
+    if (!generationResult || !translations || !videoFile) return;
+    
+    if (typeof JSZip === 'undefined') {
+      setTranslationError("Could not create zip file. JSZip library is missing.");
+      return;
+    }
+
+    const zip = new JSZip();
+    const baseFilename = videoFile.name.replace(/\.[^/.]+$/, "");
+
+    // Add original English files
+    zip.file(`${baseFilename}-en.md`, generationResult.transcript_markdown);
+    zip.file(`${baseFilename}-en.vtt`, generationResult.subtitles_vtt);
+
+    // Add translated files
+    for (const lang in translations) {
+      if (Object.prototype.hasOwnProperty.call(translations, lang)) {
+        const translation = translations[lang as keyof Translations];
+        zip.file(`${baseFilename}-${lang}.md`, translation.transcript_markdown);
+        zip.file(`${baseFilename}-${lang}.vtt`, translation.subtitles_vtt);
+      }
+    }
+
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${baseFilename}-all-languages.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handleSegmentClick = useCallback((time: number) => {
     if (videoRef.current) {
       videoRef.current.currentTime = time;
@@ -221,12 +257,21 @@ const App: React.FC = () => {
                   {isTranslating ? (
                     <Loader message="Translating content..." />
                   ) : translations ? (
-                    <div className="flex space-x-1 mb-4 border-b border-gray-700">
-                      {['en', 'es', 'de', 'it', 'fr', 'nl'].map(lang => (
-                        <button key={lang} onClick={() => setActiveLanguage(lang)} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeLanguage === lang ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800'}`}>
-                          {lang.toUpperCase()}
-                        </button>
-                      ))}
+                    <div>
+                      <div className="flex space-x-1 mb-4 border-b border-gray-700">
+                        {['en', 'es', 'de', 'it', 'fr', 'nl'].map(lang => (
+                          <button key={lang} onClick={() => setActiveLanguage(lang)} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeLanguage === lang ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800'}`}>
+                            {lang.toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={handleDownloadAll}
+                        className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 mb-4"
+                      >
+                        <ArchiveIcon />
+                        Download All Languages (.zip)
+                      </button>
                     </div>
                   ) : (
                     <>
