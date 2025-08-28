@@ -217,20 +217,10 @@ const App: React.FC = () => {
                     </div>
                   )}
 
-                  {!translations && !isTranslating && (
-                    <button
-                      onClick={handleTranslate}
-                      className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 mb-4"
-                    >
-                      <TranslateIcon />
-                      Translate to 5 Languages
-                    </button>
-                  )}
-
-                  {translationError && <div className="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-lg my-4" role="alert">{translationError}</div>}
-                  {isTranslating && <Loader message="Translating content..." />}
-
-                  {translations && (
+                  {/* --- Translation UI Block --- */}
+                  {isTranslating ? (
+                    <Loader message="Translating content..." />
+                  ) : translations ? (
                     <div className="flex space-x-1 mb-4 border-b border-gray-700">
                       {['en', 'es', 'de', 'it', 'fr', 'nl'].map(lang => (
                         <button key={lang} onClick={() => setActiveLanguage(lang)} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeLanguage === lang ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800'}`}>
@@ -238,6 +228,17 @@ const App: React.FC = () => {
                         </button>
                       ))}
                     </div>
+                  ) : (
+                    <>
+                      {translationError && <div className="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-lg my-4" role="alert">{translationError}</div>}
+                      <button
+                        onClick={handleTranslate}
+                        className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 mb-4"
+                      >
+                        <TranslateIcon />
+                        Translate to 5 Languages
+                      </button>
+                    </>
                   )}
 
                   <TranscriptDisplay 
