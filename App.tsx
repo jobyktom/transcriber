@@ -60,28 +60,6 @@ const App: React.FC = () => {
     setActiveLanguage('en');
   };
 
-  const parseTranscriptMarkdown = (markdown: string, duration: number): TranscriptSegment[] => {
-    if (!markdown) return [];
-    
-    const lines = markdown.split('\n').filter(line => line.match(/^\(\d{2}:\d{2}:\d{2}\.\d{3}\)/));
-    
-    const segments = lines.map(line => {
-      const match = line.match(/^\((\d{2}):(\d{2}):(\d{2})\.(\d{3})\)\s*(.*)/);
-      if (!match) return null;
-      
-      const [, hours, minutes, seconds, ms, text] = match;
-      const startTime = parseInt(hours, 10) * 3600 + parseInt(minutes, 10) * 60 + parseInt(seconds, 10) + parseInt(ms, 10) / 1000;
-      
-      return { startTime, text: text.trim() };
-    }).filter((segment): segment is { startTime: number; text: string; } => segment !== null);
-
-    return segments.map((segment, index) => {
-      const nextSegment = segments[index + 1];
-      const endTime = nextSegment ? nextSegment.startTime : duration;
-      return { ...segment, endTime };
-    });
-  };
-
   const handleGenerate = async () => {
     if (!videoFile) {
       setError('Please upload a video before generating.');
@@ -103,7 +81,7 @@ const App: React.FC = () => {
     try {
       const result = await generateTranscriptAndSubtitles(videoFile, profanityMode, setProgressMessage);
       
-      if (result.status === 'error' || !result.subtitles_vtt || !result.transcript_markdown) {
+      if (result.status === 'error' || !result.subtitles_vtt || !result.transcript_json) {
         throw new Error(result.errors?.[0]?.message || 'AI generation failed with an unknown error.');
       }
       setGenerationResult(result);
@@ -151,14 +129,14 @@ const App: React.FC = () => {
     const baseFilename = videoFile.name.replace(/\.[^/.]+$/, "");
 
     // Add original English files
-    zip.file(`${baseFilename}-en.md`, generationResult.transcript_markdown);
+    zip.file(`${baseFilename}-en.json`, JSON.stringify(generationResult.transcript_json, null, 2));
     zip.file(`${baseFilename}-en.vtt`, generationResult.subtitles_vtt);
 
     // Add translated files
     for (const lang in translations) {
       if (Object.prototype.hasOwnProperty.call(translations, lang)) {
         const translation = translations[lang as keyof Translations];
-        zip.file(`${baseFilename}-${lang}.md`, translation.transcript_markdown);
+        zip.file(`${baseFilename}-${lang}.json`, JSON.stringify(translation.transcript_json, null, 2));
         zip.file(`${baseFilename}-${lang}.vtt`, translation.subtitles_vtt);
       }
     }
@@ -183,23 +161,20 @@ const App: React.FC = () => {
   const displayedContent = useMemo(() => {
     if (activeLanguage === 'en' || !translations) {
       return {
-        transcript: generationResult?.transcript_markdown,
+        transcript: generationResult?.transcript_json,
         subtitles: generationResult?.subtitles_vtt,
         lang: 'en'
       };
     }
     const translation = translations[activeLanguage as keyof Translations];
     return {
-      transcript: translation?.transcript_markdown,
+      transcript: translation?.transcript_json,
       subtitles: translation?.subtitles_vtt,
       lang: activeLanguage
     };
   }, [activeLanguage, generationResult, translations]);
   
-  const displayedSegments = useMemo(() => {
-    return parseTranscriptMarkdown(displayedContent.transcript || '', videoDuration);
-  }, [displayedContent.transcript, videoDuration]);
-
+  const displayedSegments = displayedContent.transcript || [];
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col font-sans">
@@ -295,9 +270,9 @@ const App: React.FC = () => {
                   <div className="mt-6 flex flex-col sm:flex-row gap-4">
                     {displayedContent.transcript && (
                       <SubtitleDownloader
-                        content={displayedContent.transcript}
-                        filename={`${videoFile?.name.replace(/\.[^/.]+$/, "")}-${displayedContent.lang}.md`}
-                        buttonText={`Download Transcript (.md)`}
+                        content={JSON.stringify(displayedContent.transcript, null, 2)}
+                        filename={`${videoFile?.name.replace(/\.[^/.]+$/, "")}-${displayedContent.lang}.json`}
+                        buttonText={`Download Transcript (.json)`}
                         className="bg-purple-600 hover:bg-purple-700 text-white"
                       />
                     )}

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { TranscriptSegment } from '../types';
 
@@ -20,15 +19,15 @@ export const TranscriptDisplay: React.FC<TranscriptDisplayProps> = ({ segments, 
     <div className="h-96 overflow-y-auto pr-2 bg-gray-900/70 p-3 rounded-lg border border-gray-700">
       <div className="space-y-4">
         {segments.map((segment, index) => {
-          const isActive = currentTime >= segment.startTime && currentTime <= segment.endTime;
+          const isActive = currentTime >= segment.start && currentTime < segment.end;
           return (
             <div
               key={index}
-              onClick={() => onSegmentClick(segment.startTime)}
+              onClick={() => onSegmentClick(segment.start)}
               className={`p-3 rounded-md cursor-pointer transition-colors duration-200 ${isActive ? 'bg-cyan-900/50' : 'hover:bg-gray-800'}`}
             >
               <div className={`font-mono text-sm ${isActive ? 'text-cyan-400' : 'text-gray-400'}`}>
-                {formatTime(segment.startTime)}
+                {formatTime(segment.start)}
               </div>
               <p className={`mt-1 text-base ${isActive ? 'text-white' : 'text-gray-300'}`}>
                 {segment.text}

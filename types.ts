@@ -1,7 +1,6 @@
-
 export interface TranscriptSegment {
-  startTime: number;
-  endTime: number;
+  start: number;
+  end: number;
   text: string;
 }
 
@@ -26,12 +25,12 @@ export interface GenerationResult {
   errors?: GenerationError[];
   metadata: GenerationMetadata;
   subtitles_vtt: string;
-  transcript_markdown: string;
+  transcript_json: TranscriptSegment[];
 }
 
 export interface Translation {
   subtitles_vtt: string;
-  transcript_markdown: string;
+  transcript_json: TranscriptSegment[];
 }
 
 export interface Translations {

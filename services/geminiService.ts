@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, FileState } from "@google/genai";
 import type { GenerationResult, TranslationResult } from "../types";
 
@@ -39,22 +38,33 @@ const generationResponseSchema = {
              required: ["profanity_mode", "masked_terms_count", "beeped_terms_count"]
         },
         subtitles_vtt: { type: Type.STRING },
-        transcript_markdown: { type: Type.STRING }
+        transcript_json: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    start: { type: Type.NUMBER, description: "The start time of the segment in seconds." },
+                    end: { type: Type.NUMBER, description: "The end time of the segment in seconds." },
+                    text: { type: Type.STRING, description: "The transcribed text, including any actions like [applause]." }
+                },
+                required: ["start", "end", "text"]
+            }
+        }
     },
-    required: ["status", "metadata", "subtitles_vtt", "transcript_markdown"]
+    required: ["status", "metadata", "subtitles_vtt", "transcript_json"]
 };
 
 const generationSystemInstruction = `You analyze a single uploaded video (≤500 MB). Your job:
 
 1. Generate **SUBTITLES** (spoken words only) as **WebVTT**.
-2. Generate a **TRANSCRIPT WITH ACTIONS** that includes speech + concise, bracketed descriptions of **non-speech actions/sounds** (e.g., \`[door opens]\`, \`[applause]\`, \`[music fades]\`).
+2. Generate a **TRANSCRIPT_JSON** that includes speech + concise, bracketed descriptions of **non-speech actions/sounds** (e.g., \`[door opens]\`, \`[applause]\`, \`[music fades]\`).
 
 ## General Rules
 * **Language detection**: auto-detect. Use detected language consistently in both outputs.
 * **No hallucinations**: Only describe actions clearly present (visible or audible cues).
 * **Multiple speakers**:
   * Subtitles: keep spoken words only; avoid names unless absolutely needed for clarity.
-  * Transcript: prefix with \`Speaker 1:\`, \`Speaker 2:\` if distinguishable; otherwise omit.
+  * Transcript: in the JSON text, prefix with \`Speaker 1:\`, \`Speaker 2:\` if distinguishable; otherwise omit.
 * **Profanity/colloquialisms**: verbatim in subtitles; do not sanitize.
 * **Numbers/dates**: transcribe as spoken (e.g., “twenty twenty-five”).
 
@@ -69,12 +79,10 @@ const generationSystemInstruction = `You analyze a single uploaded video (≤500
   * Merge very short utterances if it improves readability
 * Sort cues by start time; carry millisecond rounding correctly (e.g., 59.999 → next second).
 
-## Transcript with Actions Requirements
-* Markdown section headed \`# Transcript (with actions)\`.
-* For each segment:
-  * Optionally include timecode in parentheses at start: \`(00:00:03.120)\`
-  * **Speech** verbatim.
-  * **Actions** in square brackets, e.g., \`[laughter]\`, \`[door closes]\`, \`[soft music starts]\`.
+## Transcript JSON Requirements
+* Must be a valid JSON array of objects.
+* Each object must have three keys: \`start\` (number, in seconds), \`end\` (number, in seconds), and \`text\` (string).
+* The 'text' should contain the verbatim speech and any actions in square brackets, e.g., \`[laughter]\`, \`[door closes]\`.
 * Keep action notes brief and observable (no interpretation of intent).
 
 ## Profanity/Abuse Policy (configurable)
@@ -88,7 +96,7 @@ safety.profanity_mode = "verbatim" | "mask" | "beep"
   * \`"verbatim"\` → leave as-is.
   * \`"mask"\` → mask inner letters, preserve word length & first/last characters. Example: \`f***\`, \`b*****d\`. Use \`*\` for masking.
   * \`"beep"\` → replace offensive token with \`[BEEP]\`.
-* Transcript (with actions):
+* Transcript (in the JSON 'text' field):
   * \`"verbatim"\` → leave as-is.
   * \`"mask"\` → same masking pattern as above.
   * \`"beep"\` → replace offensive token with \`[beep]\` and add a short note once at the end of that line: \`[slur masked]\` (do **not** add notes in subtitles).
@@ -99,7 +107,7 @@ safety.profanity_mode = "verbatim" | "mask" | "beep"
 \`\`\`json
 {
   "status": "ok" | "error",
-  "errors": [ { "code": "...", "message": "...", "details": {} } ],
+  "errors": [ { "code": "...", "message": "..." } ],
   "metadata": {
     "language": "auto-detected BCP-47 code if known",
     "duration_s": 0,
@@ -110,21 +118,23 @@ safety.profanity_mode = "verbatim" | "mask" | "beep"
     "beeped_terms_count": 0
   },
   "subtitles_vtt": "WEBVTT\\n... full file ...",
-  "transcript_markdown": "# Transcript (with actions)\\n... full text ..."
+  "transcript_json": [
+    { "start": 5.5, "end": 10.1, "text": "..." }
+  ]
 }
 \`\`\`
 
 ## Error Handling & Quality Checks
 * Follow standard error codes: \`FILE_TOO_LARGE\`, \`UNSUPPORTED_FORMAT\`, etc.
 * Ensure \`subtitles_vtt\` starts with \`WEBVTT\`.
-* Actions appear **only** in \`transcript_markdown\`.
+* Actions appear **only** in \`transcript_json\`.
 * Times are monotonically increasing.`;
 
 const generationUserPromptTemplate = (profanityMode: string) => `You will receive one video file.
 Please analyze it and return **both**:
 
 1. \`subtitles_vtt\` — spoken words only, in WebVTT format.
-2. \`transcript_markdown\` — speech **plus** concise bracketed action notes.
+2. \`transcript_json\` — a JSON array of timed segments with speech **plus** concise bracketed action notes.
 
 Runtime parameter:
 safety.profanity_mode = "${profanityMode}"
@@ -213,9 +223,9 @@ Return a JSON object:
 \`\`\`json
 {
   "status": "ok" | "error",
-  "errors": [ { "code": "...", "message": "...", "details": {} } ],
+  "errors": [ { "code": "...", "message": "..." } ],
   "translations": {
-    "es": { "subtitles_vtt": "...", "transcript_markdown": "..." },
+    "es": { "subtitles_vtt": "...", "transcript_json": [{...}] },
     "de": { "...": "..." },
     "it": { "...": "..." },
     "fr": { "...": "..." },
@@ -225,12 +235,27 @@ Return a JSON object:
 \`\`\`
 
 ## Rules
-* **Preserve timing & structure**: In every \`.vtt\`, keep all cue indices, start/end times, line breaks, and cue count identical to the source. **Translate text only.**
+* **Preserve timing & structure**: 
+  * In every \`.vtt\`, keep all cue indices, start/end times, line breaks, and cue count identical to the source. **Translate text only.**
+  * In every \`transcript_json\`, translate only the \`text\` value in each object. **Do NOT modify \`start\` or \`end\` keys.**
 * **Bracketed items**: Keep square brackets. Translate the action text inside (e.g., \`[applause]\` → \`[aplausos]\`, \`[BEEP]\` stays \`[BEEP]\` unchanged).
 * **Profanity handling**: If the source contains \`[BEEP]\` or masked words (\`f***\`), keep the **same pattern and length** in the translation.
 * **Proper nouns/brands**: keep as-is unless there’s a well-established localized exonym.
 * **Validation**: Every target’s \`subtitles_vtt\` must start with \`WEBVTT\` and have the same number of cues as the source.
 * **Error handling**: If the input envelope is malformed, return \`status:"error"\`, \`code:"INVALID_INPUT"\`.`;
+
+const translationTranscriptSchema = {
+    type: Type.ARRAY,
+    items: {
+        type: Type.OBJECT,
+        properties: {
+            start: { type: Type.NUMBER },
+            end: { type: Type.NUMBER },
+            text: { type: Type.STRING }
+        },
+        required: ["start", "end", "text"]
+    }
+};
 
 const translationResponseSchema = {
     type: Type.OBJECT,
@@ -254,41 +279,41 @@ const translationResponseSchema = {
                     type: Type.OBJECT,
                     properties: {
                         subtitles_vtt: { type: Type.STRING },
-                        transcript_markdown: { type: Type.STRING }
+                        transcript_json: translationTranscriptSchema
                     },
-                    required: ["subtitles_vtt", "transcript_markdown"]
+                    required: ["subtitles_vtt", "transcript_json"]
                 },
                 de: {
                     type: Type.OBJECT,
                     properties: {
                         subtitles_vtt: { type: Type.STRING },
-                        transcript_markdown: { type: Type.STRING }
+                        transcript_json: translationTranscriptSchema
                     },
-                    required: ["subtitles_vtt", "transcript_markdown"]
+                    required: ["subtitles_vtt", "transcript_json"]
                 },
                 it: {
                     type: Type.OBJECT,
                     properties: {
                         subtitles_vtt: { type: Type.STRING },
-                        transcript_markdown: { type: Type.STRING }
+                        transcript_json: translationTranscriptSchema
                     },
-                    required: ["subtitles_vtt", "transcript_markdown"]
+                    required: ["subtitles_vtt", "transcript_json"]
                 },
                 fr: {
                     type: Type.OBJECT,
                     properties: {
                         subtitles_vtt: { type: Type.STRING },
-                        transcript_markdown: { type: Type.STRING }
+                        transcript_json: translationTranscriptSchema
                     },
-                    required: ["subtitles_vtt", "transcript_markdown"]
+                    required: ["subtitles_vtt", "transcript_json"]
                 },
                 nl: {
                     type: Type.OBJECT,
                     properties: {
                         subtitles_vtt: { type: Type.STRING },
-                        transcript_markdown: { type: Type.STRING }
+                        transcript_json: translationTranscriptSchema
                     },
-                    required: ["subtitles_vtt", "transcript_markdown"]
+                    required: ["subtitles_vtt", "transcript_json"]
                 }
             },
             required: ["es", "de", "it", "fr", "nl"]
