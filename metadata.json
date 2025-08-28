@@ -1,5 +1,5 @@
 {
-  "name": "Video Transcriber & Subtitler",
-  "description": "An application that allows users to upload a video, describe its content, and use AI to generate a full transcript and downloadable SRT subtitles.",
+  "name": "Deckers Video Intelligence Platform",
+  "description": "An internal Deckers tool to generate transcripts, subtitles, and translations from video content using AI.",
   "requestFramePermissions": []
 }

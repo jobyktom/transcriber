@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 type ProfanityMode = 'verbatim' | 'mask' | 'beep';
@@ -9,23 +8,23 @@ interface ProfanityControlProps {
   disabled: boolean;
 }
 
-const options: { value: ProfanityMode, label: string, description: string }[] = [
-  { value: 'verbatim', label: 'Verbatim', description: 'Leave all words as they are.' },
-  { value: 'mask', label: 'Mask', description: 'Replace slurs with f***.' },
-  { value: 'beep', label: 'Beep', description: 'Replace slurs with [BEEP].' },
+const options: { value: ProfanityMode, label: string }[] = [
+  { value: 'verbatim', label: 'Verbatim' },
+  { value: 'mask', label: 'Mask' },
+  { value: 'beep', label: 'Beep' },
 ];
 
 export const ProfanityControl: React.FC<ProfanityControlProps> = ({ mode, onModeChange, disabled }) => {
   return (
-    <div className="my-4">
-      <h3 className="text-lg font-semibold text-gray-300 mb-2">Profanity & Slur Control</h3>
-      <div className="flex flex-col sm:flex-row gap-2 rounded-lg bg-gray-900/50 p-2">
+    <div>
+      <h3 className="text-base font-semibold text-gray-300 mb-2">Profanity & Slur Control</h3>
+      <div className={`flex w-full rounded-lg bg-[#1a1a1a] p-1 border border-[#3a3a3a] ${disabled ? 'opacity-50' : ''}`}>
         {options.map((option) => (
           <label
             key={option.value}
-            className={`flex-1 p-3 rounded-md text-center cursor-pointer transition-colors duration-200 ${
-              mode === option.value ? 'bg-cyan-800 text-white' : 'bg-gray-800 hover:bg-gray-700'
-            } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`flex-1 p-2 rounded-md text-center cursor-pointer transition-colors duration-200 text-sm font-semibold ${
+              mode === option.value ? 'bg-[#d4af37] text-[#1a1a1a]' : 'text-gray-400 hover:bg-[#2b2b2b]'
+            } ${disabled ? 'cursor-not-allowed' : ''}`}
           >
             <input
               type="radio"
@@ -36,8 +35,7 @@ export const ProfanityControl: React.FC<ProfanityControlProps> = ({ mode, onMode
               className="sr-only"
               disabled={disabled}
             />
-            <span className="font-bold block text-sm">{option.label}</span>
-            <span className="text-xs text-gray-400">{option.description}</span>
+            <span>{option.label}</span>
           </label>
         ))}
       </div>

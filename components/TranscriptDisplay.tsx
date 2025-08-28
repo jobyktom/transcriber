@@ -16,7 +16,7 @@ const formatTime = (time: number) => {
 
 export const TranscriptDisplay: React.FC<TranscriptDisplayProps> = ({ segments, currentTime, onSegmentClick }) => {
   return (
-    <div className="h-96 overflow-y-auto pr-2 bg-gray-900/70 p-3 rounded-lg border border-gray-700">
+    <div className="h-96 overflow-y-auto pr-2 bg-[#1a1a1a] p-3 rounded-lg border border-[#3a3a3a]">
       <div className="space-y-4">
         {segments.map((segment, index) => {
           const isActive = currentTime >= segment.start && currentTime < segment.end;
@@ -24,9 +24,9 @@ export const TranscriptDisplay: React.FC<TranscriptDisplayProps> = ({ segments, 
             <div
               key={index}
               onClick={() => onSegmentClick(segment.start)}
-              className={`p-3 rounded-md cursor-pointer transition-colors duration-200 ${isActive ? 'bg-cyan-900/50' : 'hover:bg-gray-800'}`}
+              className={`p-3 rounded-md cursor-pointer transition-all duration-200 border-l-4 ${isActive ? 'bg-[#d4af37]/10 border-[#d4af37]' : 'border-transparent hover:bg-[#2b2b2b]'}`}
             >
-              <div className={`font-mono text-sm ${isActive ? 'text-cyan-400' : 'text-gray-400'}`}>
+              <div className={`font-mono text-sm ${isActive ? 'text-[#d4af37]' : 'text-gray-400'}`}>
                 {formatTime(segment.start)}
               </div>
               <p className={`mt-1 text-base ${isActive ? 'text-white' : 'text-gray-300'}`}>

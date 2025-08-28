@@ -154,6 +154,8 @@ export const generateTranscriptAndSubtitles = async (
         throw new Error("File is too large. Please upload a video under 500 MB.");
     }
     
+    let uploadedFile;
+
     try {
         // Step 1: Upload the file using the File API to avoid client-side memory issues.
         onProgress(`Uploading video... This may take a while for large files.`);
@@ -162,7 +164,7 @@ export const generateTranscriptAndSubtitles = async (
             file: videoFile,
         });
 
-        let uploadedFile = uploadResponse;
+        uploadedFile = uploadResponse;
         onProgress('File uploaded. Server is processing the video...');
 
         // Step 2: Poll for the file to become ACTIVE on the server.
@@ -172,8 +174,13 @@ export const generateTranscriptAndSubtitles = async (
             uploadedFile = getFileResponse;
         }
 
+        if (uploadedFile.state === FileState.FAILED) {
+            const failureReason = uploadedFile.error?.message || 'Unknown reason.';
+            throw new Error(`File processing failed on the server: ${failureReason} (Code: ${uploadedFile.error?.code})`);
+        }
+        
         if (uploadedFile.state !== FileState.ACTIVE) {
-            throw new Error(`File processing failed on the server. Status: ${uploadedFile.state}`);
+            throw new Error(`File processing stopped with an unexpected status: ${uploadedFile.state}`);
         }
         
         onProgress('Video processed. Preparing AI analysis...');
@@ -208,6 +215,16 @@ export const generateTranscriptAndSubtitles = async (
 
     } catch (error) {
         console.error("Error during the generation process:", error);
+        
+        // If an error occurs after a file was uploaded, try to clean it up.
+        if (uploadedFile) {
+            try {
+                await ai.files.delete({ name: uploadedFile.name });
+            } catch (cleanupError) {
+                console.error("Failed to clean up uploaded file after an error:", cleanupError);
+            }
+        }
+
         if (error instanceof Error) {
             throw new Error(`The AI process failed: ${error.message}`);
         }

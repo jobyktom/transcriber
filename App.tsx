@@ -1,12 +1,11 @@
-
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { Header } from './components/Header';
+import { Footer } from './components/Footer';
 import { VideoUpload } from './components/VideoUpload';
 import { VideoPlayer } from './components/VideoPlayer';
 import { TranscriptDisplay } from './components/TranscriptDisplay';
 import { Loader } from './components/Loader';
 import { generateTranscriptAndSubtitles, translateContent } from './services/geminiService';
-// FIX: Import the 'GenerationResult' type to resolve a type error for the 'generationResult' state.
 import type { GenerationResult, Translations } from './types';
 import { GenerateIcon, TranslateIcon, ArchiveIcon } from './components/icons';
 import { ProfanityControl } from './components/ProfanityControl';
@@ -74,6 +73,7 @@ const App: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
+    setTranslationError(null);
     setGenerationResult(null);
     setTranslations(null);
     setActiveLanguage('en');
@@ -172,16 +172,19 @@ const App: React.FC = () => {
   }, [activeLanguage, generationResult, translations]);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#1a1a1a] text-[#f0f0f0] flex flex-col font-sans">
       <Header />
-      <main className="flex-grow container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
           
-          <div className="flex flex-col gap-6 bg-gray-800/50 p-6 rounded-2xl shadow-lg border border-gray-700">
-            <h2 className="text-2xl font-bold text-cyan-400">1. Upload Your Video</h2>
+          <div className="flex flex-col gap-8 bg-[#2b2b2b] p-8 rounded-xl border border-[#3a3a3a]">
+            <div className="flex flex-col gap-4">
+              <h2 className="text-2xl font-bold text-white">1. Upload Video</h2>
+              <p className="text-gray-400">Select a video file from your computer to begin.</p>
+            </div>
             <VideoUpload onFileSelect={handleFileSelect} disabled={isLoading || isTranslating} />
             {videoUrl && (
-              <div className="mt-4">
+              <div className="mt-2">
                 <VideoPlayer 
                   src={videoUrl} 
                   videoRef={videoRef}
@@ -192,62 +195,63 @@ const App: React.FC = () => {
             )}
           </div>
 
-          <div className="flex flex-col gap-6 bg-gray-800/50 p-6 rounded-2xl shadow-lg border border-gray-700">
-            <div>
-              <h2 className="text-2xl font-bold text-cyan-400 mb-4">2. Generate Content</h2>
-              <ProfanityControl mode={profanityMode} onModeChange={setProfanityMode} disabled={isLoading || isTranslating} />
-              <button
-                onClick={handleGenerate}
-                disabled={!videoFile || isLoading || isTranslating}
-                className="mt-4 w-full flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition duration-300"
-                aria-label="Generate transcript and subtitles"
-              >
-                <GenerateIcon />
-                {isLoading ? 'Generating...' : 'Generate Transcript & Subtitles'}
-              </button>
+          <div className="flex flex-col gap-8 bg-[#2b2b2b] p-8 rounded-xl border border-[#3a3a3a]">
+            <div className="flex flex-col gap-4">
+              <h2 className="text-2xl font-bold text-white">2. Configure & Generate</h2>
+              <p className="text-gray-400">Set your content preferences and start the AI process.</p>
             </div>
+            <ProfanityControl mode={profanityMode} onModeChange={setProfanityMode} disabled={isLoading || isTranslating} />
+            <button
+              onClick={handleGenerate}
+              disabled={!videoFile || isLoading || isTranslating}
+              className="w-full flex items-center justify-center gap-3 bg-[#d4af37] hover:bg-[#c8a230] disabled:bg-[#4a4a4a] disabled:text-gray-500 disabled:cursor-not-allowed text-[#1a1a1a] font-bold py-3 px-4 rounded-lg transition-all duration-300 transform active:scale-95"
+              aria-label="Generate transcript and subtitles"
+            >
+              <GenerateIcon />
+              {isLoading ? 'Generating...' : 'Generate Content'}
+            </button>
             
-            <div className="border-t border-gray-700 pt-6">
-              <h2 className="text-2xl font-bold text-cyan-400 mb-4">3. Results</h2>
+            <div className="border-t border-[#3a3a3a] pt-8 flex flex-col gap-6">
+              <h2 className="text-2xl font-bold text-white">3. Results</h2>
               {error && <div className="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-lg" role="alert">{error}</div>}
               {isLoading && <Loader message={progressMessage} />}
               
               {!isLoading && !error && generationResult && (
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-6">
                   {generationResult.metadata && (
-                    <div className="text-sm text-gray-400 bg-gray-900/50 p-3 rounded-md space-y-1 border border-gray-700">
+                    <div className="text-sm text-gray-400 bg-[#1a1a1a] p-4 rounded-lg space-y-2 border border-[#3a3a3a]">
                        <p><strong>Language:</strong> {generationResult.metadata.language || 'N/A'}</p>
-                       <p><strong>Profanity Mode:</strong> <span className="font-mono bg-gray-700 px-1 rounded">{generationResult.metadata.profanity_mode}</span></p>
+                       <p><strong>Profanity Mode:</strong> <span className="font-mono bg-[#3a3a3a] px-1.5 py-0.5 rounded text-gray-300">{generationResult.metadata.profanity_mode}</span></p>
                        {generationResult.metadata.profanity_mode === 'mask' && <p><strong>Masked Terms:</strong> {generationResult.metadata.masked_terms_count}</p>}
                        {generationResult.metadata.profanity_mode === 'beep' && <p><strong>Beeped Terms:</strong> {generationResult.metadata.beeped_terms_count}</p>}
                     </div>
                   )}
 
                   {/* --- Actions & Tabs Section --- */}
-                  <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                  <div className="p-4 bg-[#1a1a1a] rounded-lg border border-[#3a3a3a]">
                       {isTranslating ? (
                           <Loader message="Translating content..." />
                       ) : translations ? (
                           <div className="flex flex-col gap-4">
-                              <div className="flex space-x-1 border-b border-gray-700">
+                              <div className="flex space-x-1">
                                   {['en', 'es', 'de', 'it', 'fr', 'nl'].map(lang => (
-                                      <button key={lang} onClick={() => setActiveLanguage(lang)} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeLanguage === lang ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800'}`}>
+                                      <button key={lang} onClick={() => setActiveLanguage(lang)} className={`flex-1 px-3 py-2 text-sm font-semibold rounded-t-md transition-colors ${activeLanguage === lang ? 'bg-[#3a3a3a] text-white' : 'text-gray-400 hover:bg-[#2b2b2b]'}`}>
                                           {lang.toUpperCase()}
                                       </button>
                                   ))}
                               </div>
-                              <button onClick={() => handleDownloadZip('all')} className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300">
+                              <button onClick={() => handleDownloadZip('all')} className="w-full flex items-center justify-center gap-3 bg-[#d4af37] hover:bg-[#c8a230] text-[#1a1a1a] font-bold py-3 px-4 rounded-lg transition-all duration-300 transform active:scale-95">
                                   <ArchiveIcon />
                                   Download All Languages (.zip)
                               </button>
                           </div>
                       ) : (
                           <div className="flex flex-col sm:flex-row gap-4">
-                              <button onClick={() => handleDownloadZip('en')} className="flex-1 flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300">
+                              <button onClick={() => handleDownloadZip('en')} className="flex-1 flex items-center justify-center gap-3 bg-[#d4af37] hover:bg-[#c8a230] text-[#1a1a1a] font-bold py-3 px-4 rounded-lg transition-all duration-300 transform active:scale-95">
                                   <ArchiveIcon />
                                   Download Results (.zip)
                               </button>
-                              <button onClick={handleTranslate} className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300">
+                              <button onClick={handleTranslate} className="flex-1 flex items-center justify-center gap-3 bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 transform active:scale-95">
                                   <TranslateIcon />
                                   Translate to 5 Languages
                               </button>
@@ -265,14 +269,15 @@ const App: React.FC = () => {
               )}
 
               {!isLoading && !generationResult && !error && (
-                <div className="text-center py-10 px-4 bg-gray-900/50 rounded-lg border-2 border-dashed border-gray-700">
-                  <p className="text-gray-500">Your generated transcript and subtitles will appear here.</p>
+                <div className="text-center py-10 px-4 bg-[#1a1a1a] rounded-lg border-2 border-dashed border-[#3a3a3a]">
+                  <p className="text-gray-500">Your generated transcript will appear here.</p>
                 </div>
               )}
             </div>
           </div>
         </div>
       </main>
+      <Footer error={error} translationError={translationError} />
     </div>
   );
 };

@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef } from 'react';
 import { UploadIcon } from './icons';
 
@@ -44,12 +43,12 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({ onFileSelect, disabled
   };
 
   const dynamicClasses = isDragging
-    ? 'border-cyan-400 bg-cyan-900/30'
-    : 'border-gray-600 hover:border-cyan-500 hover:bg-gray-700/50';
+    ? 'border-[#d4af37] bg-[#d4af37]/10 ring-2 ring-[#d4af37]'
+    : 'border-[#4a4a4a] hover:border-[#6a6a6a] hover:bg-[#1a1a1a]/50';
 
   return (
     <div
-      className={`relative w-full p-8 border-2 border-dashed rounded-lg text-center transition-all duration-300 cursor-pointer ${dynamicClasses} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+      className={`relative w-full p-10 border rounded-lg text-center transition-all duration-300 cursor-pointer ${dynamicClasses} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
       onDragEnter={handleDrag}
       onDragLeave={handleDrag}
       onDragOver={handleDrag}
@@ -66,10 +65,10 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({ onFileSelect, disabled
       />
       <div className="flex flex-col items-center justify-center text-gray-400">
         <UploadIcon />
-        <p className="mt-2 text-lg font-semibold">
-            {isDragging ? "Drop video here" : "Drag & drop a video file or click to select"}
+        <p className="mt-4 text-lg font-semibold text-gray-200">
+            {isDragging ? "Drop video to upload" : "Drag & drop or click to upload"}
         </p>
-        <p className="text-sm">MP4, MOV, WebM, etc.</p>
+        <p className="text-sm text-gray-500 mt-1">Supports MP4, MOV, WebM, etc. (Max 500MB)</p>
       </div>
     </div>
   );
