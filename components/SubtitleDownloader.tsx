@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { DownloadIcon } from './icons';
+// FIX: The DownloadIcon is not exported from './icons'. Using ArchiveIcon instead, which is used for downloads elsewhere in the app.
+import { ArchiveIcon } from './icons';
 
 interface SubtitleDownloaderProps {
   content: string;
@@ -27,7 +28,7 @@ export const SubtitleDownloader: React.FC<SubtitleDownloaderProps> = ({ content,
       onClick={handleDownload}
       className={`w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition duration-300 ${className}`}
     >
-      <DownloadIcon />
+      <ArchiveIcon />
       {buttonText}
     </button>
   );

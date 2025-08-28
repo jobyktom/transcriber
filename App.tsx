@@ -1,12 +1,13 @@
+
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { Header } from './components/Header';
 import { VideoUpload } from './components/VideoUpload';
 import { VideoPlayer } from './components/VideoPlayer';
 import { TranscriptDisplay } from './components/TranscriptDisplay';
-import { SubtitleDownloader } from './components/SubtitleDownloader';
 import { Loader } from './components/Loader';
 import { generateTranscriptAndSubtitles, translateContent } from './services/geminiService';
-import type { TranscriptSegment, GenerationResult, Translations } from './types';
+// FIX: Import the 'GenerationResult' type to resolve a type error for the 'generationResult' state.
+import type { GenerationResult, Translations } from './types';
 import { GenerateIcon, TranslateIcon, ArchiveIcon } from './components/icons';
 import { ProfanityControl } from './components/ProfanityControl';
 
@@ -117,40 +118,45 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDownloadAll = async () => {
-    if (!generationResult || !translations || !videoFile) return;
-    
+  const handleDownloadZip = async (scope: 'en' | 'all') => {
+    if (!generationResult || !videoFile) return;
+
     if (typeof JSZip === 'undefined') {
-      setTranslationError("Could not create zip file. JSZip library is missing.");
-      return;
+        const errorMsg = "Could not create zip file. JSZip library is missing.";
+        if (scope === 'all') setTranslationError(errorMsg);
+        else setError(errorMsg);
+        return;
     }
 
     const zip = new JSZip();
     const baseFilename = videoFile.name.replace(/\.[^/.]+$/, "");
 
-    // Add original English files
     zip.file(`${baseFilename}-en.json`, JSON.stringify(generationResult.transcript_json, null, 2));
     zip.file(`${baseFilename}-en.vtt`, generationResult.subtitles_vtt);
 
-    // Add translated files
-    for (const lang in translations) {
-      if (Object.prototype.hasOwnProperty.call(translations, lang)) {
-        const translation = translations[lang as keyof Translations];
-        zip.file(`${baseFilename}-${lang}.json`, JSON.stringify(translation.transcript_json, null, 2));
-        zip.file(`${baseFilename}-${lang}.vtt`, translation.subtitles_vtt);
-      }
+    let downloadFilename = `${baseFilename}-results.zip`;
+
+    if (scope === 'all' && translations) {
+        downloadFilename = `${baseFilename}-all-languages.zip`;
+        for (const lang in translations) {
+            if (Object.prototype.hasOwnProperty.call(translations, lang)) {
+                const translation = translations[lang as keyof Translations];
+                zip.file(`${baseFilename}-${lang}.json`, JSON.stringify(translation.transcript_json, null, 2));
+                zip.file(`${baseFilename}-${lang}.vtt`, translation.subtitles_vtt);
+            }
+        }
     }
 
     const zipBlob = await zip.generateAsync({ type: "blob" });
     const url = URL.createObjectURL(zipBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${baseFilename}-all-languages.zip`;
+    a.download = downloadFilename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  };
+};
 
   const handleSegmentClick = useCallback((time: number) => {
     if (videoRef.current) {
@@ -158,23 +164,12 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const displayedContent = useMemo(() => {
+  const displayedSegments = useMemo(() => {
     if (activeLanguage === 'en' || !translations) {
-      return {
-        transcript: generationResult?.transcript_json,
-        subtitles: generationResult?.subtitles_vtt,
-        lang: 'en'
-      };
+      return generationResult?.transcript_json || [];
     }
-    const translation = translations[activeLanguage as keyof Translations];
-    return {
-      transcript: translation?.transcript_json,
-      subtitles: translation?.subtitles_vtt,
-      lang: activeLanguage
-    };
+    return translations[activeLanguage as keyof Translations]?.transcript_json || [];
   }, [activeLanguage, generationResult, translations]);
-  
-  const displayedSegments = displayedContent.transcript || [];
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col font-sans">
@@ -218,9 +213,9 @@ const App: React.FC = () => {
               {isLoading && <Loader message={progressMessage} />}
               
               {!isLoading && !error && generationResult && (
-                <>
+                <div className="flex flex-col gap-4">
                   {generationResult.metadata && (
-                    <div className="text-sm text-gray-400 bg-gray-900/50 p-3 rounded-md mb-4 space-y-1">
+                    <div className="text-sm text-gray-400 bg-gray-900/50 p-3 rounded-md space-y-1 border border-gray-700">
                        <p><strong>Language:</strong> {generationResult.metadata.language || 'N/A'}</p>
                        <p><strong>Profanity Mode:</strong> <span className="font-mono bg-gray-700 px-1 rounded">{generationResult.metadata.profanity_mode}</span></p>
                        {generationResult.metadata.profanity_mode === 'mask' && <p><strong>Masked Terms:</strong> {generationResult.metadata.masked_terms_count}</p>}
@@ -228,64 +223,45 @@ const App: React.FC = () => {
                     </div>
                   )}
 
-                  {/* --- Translation UI Block --- */}
-                  {isTranslating ? (
-                    <Loader message="Translating content..." />
-                  ) : translations ? (
-                    <div>
-                      <div className="flex space-x-1 mb-4 border-b border-gray-700">
-                        {['en', 'es', 'de', 'it', 'fr', 'nl'].map(lang => (
-                          <button key={lang} onClick={() => setActiveLanguage(lang)} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeLanguage === lang ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800'}`}>
-                            {lang.toUpperCase()}
-                          </button>
-                        ))}
-                      </div>
-                      <button
-                        onClick={handleDownloadAll}
-                        className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 mb-4"
-                      >
-                        <ArchiveIcon />
-                        Download All Languages (.zip)
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      {translationError && <div className="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-lg my-4" role="alert">{translationError}</div>}
-                      <button
-                        onClick={handleTranslate}
-                        className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 mb-4"
-                      >
-                        <TranslateIcon />
-                        Translate to 5 Languages
-                      </button>
-                    </>
-                  )}
+                  {/* --- Actions & Tabs Section --- */}
+                  <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                      {isTranslating ? (
+                          <Loader message="Translating content..." />
+                      ) : translations ? (
+                          <div className="flex flex-col gap-4">
+                              <div className="flex space-x-1 border-b border-gray-700">
+                                  {['en', 'es', 'de', 'it', 'fr', 'nl'].map(lang => (
+                                      <button key={lang} onClick={() => setActiveLanguage(lang)} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeLanguage === lang ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800'}`}>
+                                          {lang.toUpperCase()}
+                                      </button>
+                                  ))}
+                              </div>
+                              <button onClick={() => handleDownloadZip('all')} className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300">
+                                  <ArchiveIcon />
+                                  Download All Languages (.zip)
+                              </button>
+                          </div>
+                      ) : (
+                          <div className="flex flex-col sm:flex-row gap-4">
+                              <button onClick={() => handleDownloadZip('en')} className="flex-1 flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300">
+                                  <ArchiveIcon />
+                                  Download Results (.zip)
+                              </button>
+                              <button onClick={handleTranslate} className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300">
+                                  <TranslateIcon />
+                                  Translate to 5 Languages
+                              </button>
+                          </div>
+                      )}
+                      {translationError && <div className="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-lg mt-4" role="alert">{translationError}</div>}
+                  </div>
 
                   <TranscriptDisplay 
                     segments={displayedSegments} 
                     currentTime={currentTime}
                     onSegmentClick={handleSegmentClick} 
                   />
-
-                  <div className="mt-6 flex flex-col sm:flex-row gap-4">
-                    {displayedContent.transcript && (
-                      <SubtitleDownloader
-                        content={JSON.stringify(displayedContent.transcript, null, 2)}
-                        filename={`${videoFile?.name.replace(/\.[^/.]+$/, "")}-${displayedContent.lang}.json`}
-                        buttonText={`Download Transcript (.json)`}
-                        className="bg-purple-600 hover:bg-purple-700 text-white"
-                      />
-                    )}
-                    {displayedContent.subtitles && (
-                      <SubtitleDownloader
-                        content={displayedContent.subtitles}
-                        filename={`${videoFile?.name.replace(/\.[^/.]+$/, "")}-${displayedContent.lang}.vtt`}
-                        buttonText={`Download Subtitles (.vtt)`}
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                      />
-                    )}
-                  </div>
-                </>
+                </div>
               )}
 
               {!isLoading && !generationResult && !error && (
