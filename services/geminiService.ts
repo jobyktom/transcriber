@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, FileState } from "@google/genai";
-import type { GenerationResult, TranslationResult } from "../types";
+import type { GenerationResult, TranslationResult, LanguageCode } from "../types";
 
 if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable is not set.");
@@ -158,14 +158,14 @@ export const generateTranscriptAndSubtitles = async (
 
     try {
         // Step 1: Upload the file using the File API to avoid client-side memory issues.
-        onProgress(`Uploading video... This may take a while for large files.`);
+        onProgress(`Uploading video... (this may take a while for large files)`);
         
         const uploadResponse = await ai.files.upload({
             file: videoFile,
         });
 
         uploadedFile = uploadResponse;
-        onProgress('File uploaded. Server is processing the video...');
+        onProgress('Upload complete. Server is processing the video...');
 
         // Step 2: Poll for the file to become ACTIVE on the server.
         while (uploadedFile.state === FileState.PROCESSING) {
@@ -183,8 +183,6 @@ export const generateTranscriptAndSubtitles = async (
             throw new Error(`File processing stopped with an unexpected status: ${uploadedFile.state}`);
         }
         
-        onProgress('Video processed. Preparing AI analysis...');
-
         // Step 3: Use the uploaded file's URI in the generateContent call.
         const videoPart = {
             fileData: {
@@ -194,7 +192,7 @@ export const generateTranscriptAndSubtitles = async (
         };
 
         const userPrompt = generationUserPromptTemplate(profanityMode);
-        onProgress('Analyzing video... this may take several minutes.');
+        onProgress('Analyzing content... (this is the longest step and may take several minutes)');
         
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
@@ -235,7 +233,7 @@ export const generateTranscriptAndSubtitles = async (
 
 // --- TRANSLATION ---
 
-const translationSystemInstruction = `You receive a JSON envelope previously produced by our pipeline. Your task: create **faithful translations** into these target languages: \`["es","de","it","fr","nl"]\`
+const createTranslationSystemInstruction = (targetLanguages: LanguageCode[]): string => `You receive a JSON envelope previously produced by our pipeline. Your task: create **faithful translations** into these target languages: \`[${targetLanguages.map(l => `"${l}"`).join(',')}]\`
 
 ## Output Contract
 Return a JSON object:
@@ -244,11 +242,7 @@ Return a JSON object:
   "status": "ok" | "error",
   "errors": [ { "code": "...", "message": "..." } ],
   "translations": {
-    "es": { "subtitles_vtt": "...", "transcript_json": [{...}] },
-    "de": { "...": "..." },
-    "it": { "...": "..." },
-    "fr": { "...": "..." },
-    "nl": { "...": "..." }
+    // Contains only the requested languages, e.g., "es", "de"
   }
 }
 \`\`\`
@@ -264,99 +258,84 @@ Return a JSON object:
 * **Validation**: Every target’s \`subtitles_vtt\` must start with \`WEBVTT\` and have the same number of cues as the source.
 * **Error handling**: If the input envelope is malformed, return \`status:"error"\`, \`code:"INVALID_INPUT"\`.`;
 
-const translationTranscriptSchema = {
-    type: Type.ARRAY,
-    items: {
-        type: Type.OBJECT,
-        properties: {
-            start: { type: Type.NUMBER },
-            end: { type: Type.NUMBER },
-            text: { type: Type.STRING }
-        },
-        required: ["start", "end", "text"]
-    }
-};
 
-const translationResponseSchema = {
-    type: Type.OBJECT,
-    properties: {
-        status: { type: Type.STRING, enum: ["ok", "error"] },
-        errors: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    code: { type: Type.STRING },
-                    message: { type: Type.STRING },
-                },
-                required: ["code", "message"]
-            }
-        },
-        translations: {
+const createTranslationResponseSchema = (targetLanguages: LanguageCode[]) => {
+    const languageProperties: Record<string, any> = {};
+
+    const translationTranscriptSchema = {
+        type: Type.ARRAY,
+        items: {
             type: Type.OBJECT,
             properties: {
-                es: {
+                start: { type: Type.NUMBER },
+                end: { type: Type.NUMBER },
+                text: { type: Type.STRING }
+            },
+            required: ["start", "end", "text"]
+        }
+    };
+
+    targetLanguages.forEach(lang => {
+        languageProperties[lang] = {
+            type: Type.OBJECT,
+            properties: {
+                subtitles_vtt: { type: Type.STRING },
+                transcript_json: translationTranscriptSchema
+            },
+            required: ["subtitles_vtt", "transcript_json"]
+        };
+    });
+
+    return {
+        type: Type.OBJECT,
+        properties: {
+            status: { type: Type.STRING, enum: ["ok", "error"] },
+            errors: {
+                type: Type.ARRAY,
+                items: {
                     type: Type.OBJECT,
                     properties: {
-                        subtitles_vtt: { type: Type.STRING },
-                        transcript_json: translationTranscriptSchema
+                        code: { type: Type.STRING },
+                        message: { type: Type.STRING },
                     },
-                    required: ["subtitles_vtt", "transcript_json"]
-                },
-                de: {
-                    type: Type.OBJECT,
-                    properties: {
-                        subtitles_vtt: { type: Type.STRING },
-                        transcript_json: translationTranscriptSchema
-                    },
-                    required: ["subtitles_vtt", "transcript_json"]
-                },
-                it: {
-                    type: Type.OBJECT,
-                    properties: {
-                        subtitles_vtt: { type: Type.STRING },
-                        transcript_json: translationTranscriptSchema
-                    },
-                    required: ["subtitles_vtt", "transcript_json"]
-                },
-                fr: {
-                    type: Type.OBJECT,
-                    properties: {
-                        subtitles_vtt: { type: Type.STRING },
-                        transcript_json: translationTranscriptSchema
-                    },
-                    required: ["subtitles_vtt", "transcript_json"]
-                },
-                nl: {
-                    type: Type.OBJECT,
-                    properties: {
-                        subtitles_vtt: { type: Type.STRING },
-                        transcript_json: translationTranscriptSchema
-                    },
-                    required: ["subtitles_vtt", "transcript_json"]
+                    required: ["code", "message"]
                 }
             },
-            required: ["es", "de", "it", "fr", "nl"]
-        }
-    },
-    required: ["status", "translations"]
+            translations: {
+                type: Type.OBJECT,
+                properties: languageProperties,
+                required: targetLanguages
+            }
+        },
+        required: ["status", "translations"]
+    };
 };
 
 
 export const translateContent = async (
-    generationResult: GenerationResult
+    generationResult: GenerationResult,
+    targetLanguages: LanguageCode[]
 ): Promise<TranslationResult> => {
     
+    if (targetLanguages.length === 0) {
+        return {
+            status: 'ok',
+            translations: {}
+        };
+    }
+
     const userPrompt = JSON.stringify(generationResult, null, 2);
+    const systemInstruction = createTranslationSystemInstruction(targetLanguages);
+    const responseSchema = createTranslationResponseSchema(targetLanguages);
 
     try {
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: { parts: [{ text: userPrompt }] },
             config: {
-                systemInstruction: translationSystemInstruction,
+                systemInstruction: systemInstruction,
                 responseMimeType: "application/json",
-                responseSchema: translationResponseSchema,
+                responseSchema: responseSchema,
             },
         });
 

@@ -1,3 +1,5 @@
+export type LanguageCode = 'es' | 'de' | 'it' | 'fr' | 'nl';
+
 export interface TranscriptSegment {
   start: number;
   end: number;
@@ -33,13 +35,7 @@ export interface Translation {
   transcript_json: TranscriptSegment[];
 }
 
-export interface Translations {
-  es: Translation;
-  de: Translation;
-  it: Translation;
-  fr: Translation;
-  nl: Translation;
-}
+export type Translations = Partial<Record<LanguageCode, Translation>>;
 
 export interface TranslationResult {
     status: "ok" | "error";

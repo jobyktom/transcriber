@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
@@ -6,9 +7,10 @@ import { VideoPlayer } from './components/VideoPlayer';
 import { TranscriptDisplay } from './components/TranscriptDisplay';
 import { Loader } from './components/Loader';
 import { generateTranscriptAndSubtitles, translateContent } from './services/geminiService';
-import type { GenerationResult, Translations } from './types';
+import type { GenerationResult, Translations, LanguageCode } from './types';
 import { GenerateIcon, TranslateIcon, ArchiveIcon } from './components/icons';
 import { ProfanityControl } from './components/ProfanityControl';
+import { LanguageSelector } from './components/LanguageSelector';
 
 declare var JSZip: any;
 
@@ -21,6 +23,7 @@ const App: React.FC = () => {
   const [translations, setTranslations] = useState<Translations | null>(null);
   
   const [profanityMode, setProfanityMode] = useState<'verbatim' | 'mask' | 'beep'>('verbatim');
+  const [targetLanguages, setTargetLanguages] = useState<LanguageCode[]>(['es', 'de', 'it', 'fr', 'nl']);
   const [activeLanguage, setActiveLanguage] = useState<string>('en');
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -58,6 +61,7 @@ const App: React.FC = () => {
     setProgressMessage('');
     setCurrentTime(0);
     setActiveLanguage('en');
+    setTargetLanguages(['es', 'de', 'it', 'fr', 'nl']);
   };
 
   const handleGenerate = async () => {
@@ -101,10 +105,14 @@ const App: React.FC = () => {
       setTranslationError('Cannot translate without a generated transcript.');
       return;
     }
+    if (targetLanguages.length === 0) {
+        setTranslationError('Please select at least one language to translate.');
+        return;
+    }
     setIsTranslating(true);
     setTranslationError(null);
     try {
-      const result = await translateContent(generationResult);
+      const result = await translateContent(generationResult, targetLanguages);
       if(result.status === 'error') {
         throw new Error(result.errors?.[0]?.message || 'AI translation failed with an unknown error.');
       }
@@ -141,8 +149,10 @@ const App: React.FC = () => {
         for (const lang in translations) {
             if (Object.prototype.hasOwnProperty.call(translations, lang)) {
                 const translation = translations[lang as keyof Translations];
-                zip.file(`${baseFilename}-${lang}.json`, JSON.stringify(translation.transcript_json, null, 2));
-                zip.file(`${baseFilename}-${lang}.vtt`, translation.subtitles_vtt);
+                if (translation) {
+                  zip.file(`${baseFilename}-${lang}.json`, JSON.stringify(translation.transcript_json, null, 2));
+                  zip.file(`${baseFilename}-${lang}.vtt`, translation.subtitles_vtt);
+                }
             }
         }
     }
@@ -200,7 +210,9 @@ const App: React.FC = () => {
               <h2 className="text-2xl font-bold text-white">2. Configure & Generate</h2>
               <p className="text-gray-400">Set your content preferences and start the AI process.</p>
             </div>
+
             <ProfanityControl mode={profanityMode} onModeChange={setProfanityMode} disabled={isLoading || isTranslating} />
+            
             <button
               onClick={handleGenerate}
               disabled={!videoFile || isLoading || isTranslating}
@@ -234,7 +246,7 @@ const App: React.FC = () => {
                       ) : translations ? (
                           <div className="flex flex-col gap-4">
                               <div className="flex space-x-1">
-                                  {['en', 'es', 'de', 'it', 'fr', 'nl'].map(lang => (
+                                  {['en', ...Object.keys(translations)].map(lang => (
                                       <button key={lang} onClick={() => setActiveLanguage(lang)} className={`flex-1 px-3 py-2 text-sm font-semibold rounded-t-md transition-colors ${activeLanguage === lang ? 'bg-[#3a3a3a] text-white' : 'text-gray-400 hover:bg-[#2b2b2b]'}`}>
                                           {lang.toUpperCase()}
                                       </button>
@@ -246,14 +258,23 @@ const App: React.FC = () => {
                               </button>
                           </div>
                       ) : (
-                          <div className="flex flex-col sm:flex-row gap-4">
-                              <button onClick={() => handleDownloadZip('en')} className="flex-1 flex items-center justify-center gap-3 bg-[#d4af37] hover:bg-[#c8a230] text-[#1a1a1a] font-bold py-3 px-4 rounded-lg transition-all duration-300 transform active:scale-95">
+                          <div className="flex flex-col gap-6">
+                              <button onClick={() => handleDownloadZip('en')} className="w-full flex items-center justify-center gap-3 bg-[#d4af37] hover:bg-[#c8a230] text-[#1a1a1a] font-bold py-3 px-4 rounded-lg transition-all duration-300 transform active:scale-95">
                                   <ArchiveIcon />
                                   Download Results (.zip)
                               </button>
-                              <button onClick={handleTranslate} className="flex-1 flex items-center justify-center gap-3 bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 transform active:scale-95">
+                              <LanguageSelector 
+                                selectedLanguages={targetLanguages}
+                                onSelectionChange={setTargetLanguages}
+                                disabled={isTranslating}
+                              />
+                              <button 
+                                onClick={handleTranslate} 
+                                disabled={targetLanguages.length === 0 || isTranslating}
+                                className="w-full flex items-center justify-center gap-3 bg-gray-600 hover:bg-gray-500 disabled:bg-[#4a4a4a] disabled:text-gray-500 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 transform active:scale-95"
+                              >
                                   <TranslateIcon />
-                                  Translate to 5 Languages
+                                  {targetLanguages.length > 0 ? `Translate to ${targetLanguages.length} Language(s)` : 'Select a Language'}
                               </button>
                           </div>
                       )}
