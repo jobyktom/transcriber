@@ -5,9 +5,11 @@ import { DownloadIcon } from './icons';
 interface SubtitleDownloaderProps {
   content: string;
   filename: string;
+  buttonText: string;
+  className?: string;
 }
 
-export const SubtitleDownloader: React.FC<SubtitleDownloaderProps> = ({ content, filename }) => {
+export const SubtitleDownloader: React.FC<SubtitleDownloaderProps> = ({ content, filename, buttonText, className }) => {
   const handleDownload = () => {
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -23,10 +25,10 @@ export const SubtitleDownloader: React.FC<SubtitleDownloaderProps> = ({ content,
   return (
     <button
       onClick={handleDownload}
-      className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300"
+      className={`w-full flex items-center justify-center gap-2 font-bold py-3 px-4 rounded-lg transition duration-300 ${className}`}
     >
       <DownloadIcon />
-      Download Subtitles (.vtt)
+      {buttonText}
     </button>
   );
 };
