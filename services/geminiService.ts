@@ -21,7 +21,6 @@ const generationResponseSchema = {
                 properties: {
                     code: { type: Type.STRING },
                     message: { type: Type.STRING },
-                    details: { type: Type.OBJECT }
                 },
                 required: ["code", "message"]
             }
@@ -146,13 +145,11 @@ export const generateTranscriptAndSubtitles = async (
     try {
         // Step 1: Upload the file using the File API to avoid client-side memory issues.
         onProgress(`Uploading video... This may take a while for large files.`);
-        // FIX: The error indicates `displayName` is not a valid property for `ai.files.upload` in the used SDK version.
+        
         const uploadResponse = await ai.files.upload({
             file: videoFile,
         });
 
-        // FIX: The error "Property 'file' does not exist on type 'File_2'" suggests that
-        // `ai.files.upload()` returns the File object directly, not a wrapper object.
         let uploadedFile = uploadResponse;
         onProgress('File uploaded. Server is processing the video...');
 
@@ -160,7 +157,6 @@ export const generateTranscriptAndSubtitles = async (
         while (uploadedFile.state === FileState.PROCESSING) {
             await new Promise(resolve => setTimeout(resolve, 5000)); // Poll every 5 seconds
             const getFileResponse = await ai.files.get({name: uploadedFile.name});
-            // FIX: The error suggests `ai.files.get()` also returns the File object directly.
             uploadedFile = getFileResponse;
         }
 
@@ -247,7 +243,6 @@ const translationResponseSchema = {
                 properties: {
                     code: { type: Type.STRING },
                     message: { type: Type.STRING },
-                    details: { type: Type.OBJECT }
                 },
                 required: ["code", "message"]
             }
