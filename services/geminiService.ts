@@ -84,7 +84,11 @@ const generationSystemInstruction = `You analyze a single uploaded video (≤500
 * Each object must have three keys: \`start\` (number, in seconds), \`end\` (number, in seconds), and \`text\` (string).
 * The 'text' should contain the verbatim speech and any actions in square brackets, e.g., \`[laughter]\`, \`[door closes]\`.
 * Keep action notes brief and observable (no interpretation of intent).
-* **CRITICAL JSON RULE**: Any double-quote characters (") inside a JSON string value MUST be escaped with a backslash (\\"). For example, if the speech is 'He said, "Hi!"', the JSON 'text' field must be "He said, \\"Hi!\\"". This is MANDATORY for valid JSON output.
+* **CRITICAL JSON RULES**: For the entire output to be valid JSON, all string values MUST follow these escaping rules:
+  * 1. Double-quotes (") inside a string must be escaped with a backslash (\\"). E.g., \`"He said, \\"Hi!\\""\`.
+  * 2. Backslashes (\\) inside a string must be escaped with another backslash (\\\\). E.g., \`"Path: C:\\\\Users\\\\Test"\`.
+  * 3. Newlines inside a string must be escaped as \\n.
+  * Adherence to these rules is MANDATORY.
 
 ## Profanity/Abuse Policy (configurable)
 Add a runtime parameter:
@@ -141,7 +145,7 @@ Runtime parameter:
 safety.profanity_mode = "${profanityMode}"
 
 Follow the **Output Contract** and **Error Handling Rules** from the system instructions.
-**Crucially, you MUST escape all double-quotes within JSON string values to ensure the output is valid.**
+**Crucially, you MUST follow all JSON string escaping rules (for quotes, backslashes, newlines) to ensure the output is valid.**
 **Deliver only the JSON envelope** specified.`;
 
 export const generateTranscriptAndSubtitles = async (
@@ -251,7 +255,11 @@ Return a JSON object:
 * **Preserve timing & structure**: 
   * In every \`.vtt\`, keep all cue indices, start/end times, line breaks, and cue count identical to the source. **Translate text only.**
   * In every \`transcript_json\`, translate only the \`text\` value in each object. **Do NOT modify \`start\` or \`end\` keys.**
-* **CRITICAL JSON RULE**: Any double-quote characters (") inside a JSON string value MUST be escaped with a backslash (\\"). For example, if the translated speech is 'Él dijo: "¡Hola!"', the JSON 'text' field must be "Él dijo: \\"¡Hola!\\"". This is MANDATORY for valid JSON output.
+* **CRITICAL JSON RULES**: For the entire output to be valid JSON, all string values MUST follow these escaping rules:
+  * 1. Double-quotes (") inside a string must be escaped with a backslash (\\"). E.g., in Spanish: \`"Él dijo: \\"¡Hola!\\""\`.
+  * 2. Backslashes (\\) inside a string must be escaped with another backslash (\\\\).
+  * 3. Newlines inside a string must be escaped as \\n.
+  * Adherence to these rules is MANDATORY.
 * **Bracketed items**: Keep square brackets. Translate the action text inside (e.g., \`[applause]\` → \`[aplausos]\`, \`[BEEP]\` stays \`[BEEP]\` unchanged).
 * **Profanity handling**: If the source contains \`[BEEP]\` or masked words (\`f***\`), keep the **same pattern and length** in the translation.
 * **Proper nouns/brands**: keep as-is unless there’s a well-established localized exonym.
